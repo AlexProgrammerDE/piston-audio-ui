@@ -1,0 +1,13 @@
+# Piston Audio - Python Dependencies
+
+# Web UI framework
+nicegui>=1.4.0
+
+# D-Bus for Bluetooth agent
+dbus-fast>=2.0.0
+
+# Async utilities
+asyncio-throttle>=1.0.0
+
+# Type hints (development)
+typing-extensions>=4.0.0
