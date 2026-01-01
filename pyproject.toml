@@ -44,9 +44,9 @@ dev = [
 piston-audio = "src.main:main"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/piston-audio-ui"
-Repository = "https://github.com/yourusername/piston-audio-ui"
-Issues = "https://github.com/yourusername/piston-audio-ui/issues"
+Homepage = "https://github.com/AlexProgrammerDE/piston-audio-ui"
+Repository = "https://github.com/AlexProgrammerDE/piston-audio-ui"
+Issues = "https://github.com/AlexProgrammerDE/piston-audio-ui/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

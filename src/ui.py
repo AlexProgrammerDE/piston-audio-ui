@@ -453,6 +453,6 @@ class PistonAudioUI:
                     ui.label("Bluetooth audio receiver for Raspberry Pi").classes("text-sm text-gray-500")
                     ui.link(
                         "GitHub",
-                        "https://github.com/yourusername/piston-audio-ui",
+                        "https://github.com/AlexProgrammerDE/piston-audio-ui",
                         new_tab=True,
                     ).classes("text-sm")

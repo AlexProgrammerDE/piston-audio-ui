@@ -42,14 +42,14 @@ Turn your Raspberry Pi into a Bluetooth audio receiver with a sleek web interfac
 ### One-Line Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/yourusername/piston-audio-ui/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/AlexProgrammerDE/piston-audio-ui/main/install.sh | sudo bash
 ```
 
 ### Manual Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/piston-audio-ui.git
+git clone https://github.com/AlexProgrammerDE/piston-audio-ui.git
 cd piston-audio-ui
 
 # Run the installer
@@ -63,7 +63,7 @@ sudo systemctl start piston-audio
 
 ```bash
 # Clone and enter directory
-git clone https://github.com/yourusername/piston-audio-ui.git
+git clone https://github.com/AlexProgrammerDE/piston-audio-ui.git
 cd piston-audio-ui
 
 # Run with virtual environment
@@ -254,7 +254,7 @@ sudo ufw status
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/piston-audio-ui.git
+git clone https://github.com/AlexProgrammerDE/piston-audio-ui.git
 cd piston-audio-ui
 
 # Create virtual environment
