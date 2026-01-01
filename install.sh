@@ -10,14 +10,31 @@
 # - PipeWire audio backend (recommended)
 # - PulseAudio fallback
 #
+# Usage:
+#   Local:  sudo ./install.sh
+#   Remote: curl -fsSL https://raw.githubusercontent.com/AlexProgrammerDE/piston-audio-ui/main/install.sh | sudo bash
+#
 
 set -e
 
 # Configuration
 PISTON_PORT=7654
 PISTON_USER="${SUDO_USER:-pi}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VERSION="1.0.0"
+REPO_URL="https://github.com/AlexProgrammerDE/piston-audio-ui.git"
+INSTALL_DIR="/opt/piston-audio"
+
+# Determine script directory - handle both local run and curl pipe
+if [ -n "${BASH_SOURCE[0]}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # Check if we're in the actual repo directory
+    if [ -f "$SCRIPT_DIR/requirements.txt" ] && [ -d "$SCRIPT_DIR/src" ]; then
+        INSTALL_DIR="$SCRIPT_DIR"
+    fi
+else
+    # Running from curl pipe - will clone to INSTALL_DIR
+    SCRIPT_DIR=""
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -95,6 +112,45 @@ detect_os() {
             warning "Unknown OS version, attempting native packages"
             ;;
     esac
+}
+
+# Clone or update the repository
+setup_project_files() {
+    step "Setting up project files..."
+    
+    # Check if we need to clone
+    if [ ! -f "$INSTALL_DIR/requirements.txt" ] || [ ! -d "$INSTALL_DIR/src" ]; then
+        info "Cloning Piston Audio repository..."
+        
+        # Ensure git is installed
+        if ! command -v git &> /dev/null; then
+            apt-get install -y git
+        fi
+        
+        # Remove incomplete installation if exists
+        if [ -d "$INSTALL_DIR" ]; then
+            rm -rf "$INSTALL_DIR"
+        fi
+        
+        # Clone the repository
+        git clone "$REPO_URL" "$INSTALL_DIR"
+        
+        success "Repository cloned to $INSTALL_DIR"
+    else
+        # Update existing repository if it's a git repo
+        if [ -d "$INSTALL_DIR/.git" ]; then
+            info "Updating existing repository..."
+            cd "$INSTALL_DIR"
+            git fetch origin
+            git reset --hard origin/main 2>/dev/null || git reset --hard origin/master 2>/dev/null || true
+            success "Repository updated"
+        else
+            info "Using existing project files in $INSTALL_DIR"
+        fi
+    fi
+    
+    # Ensure proper ownership
+    chown -R "$PISTON_USER:$PISTON_USER" "$INSTALL_DIR"
 }
 
 # Setup package repositories
@@ -302,7 +358,14 @@ EOF
 install_python_deps() {
     step "Setting up Python environment..."
     
-    VENV_DIR="$SCRIPT_DIR/venv"
+    VENV_DIR="$INSTALL_DIR/venv"
+    
+    # Verify requirements.txt exists
+    if [ ! -f "$INSTALL_DIR/requirements.txt" ]; then
+        error "requirements.txt not found in $INSTALL_DIR"
+        error "Please ensure project files are properly installed"
+        exit 1
+    fi
     
     # Create or update virtual environment
     if [ -d "$VENV_DIR" ]; then
@@ -316,7 +379,7 @@ install_python_deps() {
     source "$VENV_DIR/bin/activate"
     
     pip install --upgrade pip wheel setuptools
-    pip install --upgrade -r "$SCRIPT_DIR/requirements.txt"
+    pip install --upgrade -r "$INSTALL_DIR/requirements.txt"
     
     deactivate
     
@@ -349,8 +412,8 @@ Requires=dbus.socket
 Type=simple
 User=root
 Group=root
-WorkingDirectory=$SCRIPT_DIR
-ExecStart=$SCRIPT_DIR/venv/bin/python -m src.main --host 0.0.0.0 --port $PISTON_PORT
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$INSTALL_DIR/venv/bin/python -m src.main --host 0.0.0.0 --port $PISTON_PORT
 Restart=on-failure
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
@@ -431,10 +494,11 @@ update_installation() {
     step "Updating Piston Audio..."
     
     # Pull latest code if it's a git repo
-    if [ -d "$SCRIPT_DIR/.git" ]; then
+    if [ -d "$INSTALL_DIR/.git" ]; then
         info "Pulling latest changes from git..."
-        cd "$SCRIPT_DIR"
-        git pull origin main 2>/dev/null || git pull origin master 2>/dev/null || true
+        cd "$INSTALL_DIR"
+        git fetch origin
+        git reset --hard origin/main 2>/dev/null || git reset --hard origin/master 2>/dev/null || true
     fi
     
     # Update Python dependencies
@@ -463,6 +527,8 @@ print_instructions() {
     echo -e "${GREEN}=============================================="
     echo "  Piston Audio Installation Complete!"
     echo -e "==============================================${NC}"
+    echo ""
+    echo "Installed to: $INSTALL_DIR"
     echo ""
     echo "Web Interface:"
     echo "  http://${IP_ADDR:-<your-pi-ip>}:$PISTON_PORT"
@@ -494,11 +560,13 @@ main() {
     
     if is_update; then
         info "Existing installation detected - performing update"
+        setup_project_files
         update_installation
     else
-        info "Fresh installation"
+        info "Fresh installation to $INSTALL_DIR"
         setup_repositories
         install_system_deps
+        setup_project_files
         configure_bluetooth
         configure_pipewire
         configure_user_session
