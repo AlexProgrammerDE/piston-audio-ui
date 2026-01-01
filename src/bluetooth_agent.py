@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Callable
+from typing import Callable, Any
 
 from dbus_fast import BusType, Variant
 from dbus_fast.aio import MessageBus
-from dbus_fast.service import ServiceInterface, method, PropertyAccess, dbus_property
+from dbus_fast.service import ServiceInterface, method
 
 logger = logging.getLogger(__name__)
 
@@ -127,20 +127,20 @@ class BluetoothAgent(ServiceInterface):
             if request.device_path in self._pending_requests:
                 del self._pending_requests[request.device_path]
 
-    @method()
-    def Release(self) -> None:
+    @method(name="Release")
+    def release(self) -> None:
         """Called when the agent is unregistered."""
         logger.info("Bluetooth agent released")
         
-    @method()
-    async def RequestPinCode(self, device: "o") -> "s":
+    @method(name="RequestPinCode")
+    async def request_pin_code(self, device: str) -> str:
         """Request PIN code for pairing."""
         name, address = await self._get_device_info(device)
         logger.info(f"PIN code requested for {name} ({address})")
         return "0000"
         
-    @method()
-    async def DisplayPinCode(self, device: "o", pincode: "s") -> None:
+    @method(name="DisplayPinCode")
+    async def display_pin_code(self, device: str, pincode: str) -> None:
         """Display PIN code for user."""
         name, address = await self._get_device_info(device)
         logger.info(f"Display PIN {pincode} for {name} ({address})")
@@ -156,15 +156,15 @@ class BluetoothAgent(ServiceInterface):
         if self._on_pairing_request:
             self._on_pairing_request(request)
             
-    @method()
-    async def RequestPasskey(self, device: "o") -> "u":
+    @method(name="RequestPasskey")
+    async def request_passkey(self, device: str) -> int:
         """Request passkey for pairing."""
         name, address = await self._get_device_info(device)
         logger.info(f"Passkey requested for {name} ({address})")
         return 0
         
-    @method()
-    async def DisplayPasskey(self, device: "o", passkey: "u", entered: "q") -> None:
+    @method(name="DisplayPasskey")
+    async def display_passkey(self, device: str, passkey: int, entered: int) -> None:
         """Display passkey for user."""
         name, address = await self._get_device_info(device)
         passkey_str = f"{passkey:06d}"
@@ -181,8 +181,8 @@ class BluetoothAgent(ServiceInterface):
         if self._on_pairing_request:
             self._on_pairing_request(request)
             
-    @method()
-    async def RequestConfirmation(self, device: "o", passkey: "u") -> None:
+    @method(name="RequestConfirmation")
+    async def request_confirmation(self, device: str, passkey: int) -> None:
         """Request confirmation for pairing."""
         name, address = await self._get_device_info(device)
         passkey_str = f"{passkey:06d}"
@@ -206,8 +206,8 @@ class BluetoothAgent(ServiceInterface):
             from dbus_fast import DBusError
             raise DBusError("org.bluez.Error.Rejected", "Pairing rejected by user")
             
-    @method()
-    async def RequestAuthorization(self, device: "o") -> None:
+    @method(name="RequestAuthorization")
+    async def request_authorization(self, device: str) -> None:
         """Request authorization for incoming connection."""
         name, address = await self._get_device_info(device)
         logger.info(f"Authorization requested for {name} ({address})")
@@ -228,8 +228,8 @@ class BluetoothAgent(ServiceInterface):
             from dbus_fast import DBusError
             raise DBusError("org.bluez.Error.Rejected", "Authorization rejected by user")
             
-    @method()
-    async def AuthorizeService(self, device: "o", uuid: "s") -> None:
+    @method(name="AuthorizeService")
+    async def authorize_service(self, device: str, uuid: str) -> None:
         """Authorize a Bluetooth service."""
         name, address = await self._get_device_info(device)
         logger.info(f"Service {uuid} authorization for {name} ({address})")
@@ -261,8 +261,8 @@ class BluetoothAgent(ServiceInterface):
             from dbus_fast import DBusError
             raise DBusError("org.bluez.Error.Rejected", "Service authorization rejected")
             
-    @method()
-    def Cancel(self) -> None:
+    @method(name="Cancel")
+    def cancel(self) -> None:
         """Cancel ongoing pairing."""
         logger.info("Pairing cancelled")
         # Cancel all pending requests
@@ -358,7 +358,7 @@ class BluetoothManager:
         proxy = self._bus.get_proxy_object(BLUEZ_SERVICE, "/org/bluez", introspection)
         agent_manager = proxy.get_interface(AGENT_MANAGER_INTERFACE)
         
-        await agent_manager.call_register_agent(agent_path, "DisplayYesNo")
+        await agent_manager.call_register_agent(agent_path, "NoInputNoOutput")
         await agent_manager.call_request_default_agent(agent_path)
         
         logger.info("Bluetooth agent registered")
