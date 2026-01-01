@@ -40,6 +40,36 @@ class PairingStatus(Enum):
     TIMEOUT = "timeout"
 
 
+class DeviceState(Enum):
+    """Connection state of a device."""
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    DISCONNECTING = "disconnecting"
+    PAIRING = "pairing"
+    ERROR = "error"
+
+
+class BluetoothError(Exception):
+    """Base class for Bluetooth errors."""
+    pass
+
+
+class ConnectionError(BluetoothError):
+    """Error during device connection."""
+    pass
+
+
+class PairingError(BluetoothError):
+    """Error during device pairing."""
+    pass
+
+
+class AdapterError(BluetoothError):
+    """Error with Bluetooth adapter."""
+    pass
+
+
 @dataclass
 class PairingRequest:
     """Represents a pending pairing request."""
@@ -60,7 +90,49 @@ class BluetoothDevice:
     paired: bool = False
     trusted: bool = False
     connected: bool = False
+    blocked: bool = False
     icon: str = "audio-card"
+    rssi: Optional[int] = None
+    battery_percentage: Optional[int] = None
+    uuids: Optional[List[str]] = None
+    state: DeviceState = DeviceState.DISCONNECTED
+    error_message: Optional[str] = None
+    
+    def __post_init__(self):
+        if self.uuids is None:
+            self.uuids = []
+        # Update state based on connection status
+        if self.connected:
+            self.state = DeviceState.CONNECTED
+            
+    @property
+    def is_audio_device(self) -> bool:
+        """Check if device supports audio profiles."""
+        if not self.uuids:
+            return False
+        audio_uuids = [
+            "0000110a-0000-1000-8000-00805f9b34fb",  # A2DP Source
+            "0000110b-0000-1000-8000-00805f9b34fb",  # A2DP Sink
+            "0000110e-0000-1000-8000-00805f9b34fb",  # AVRCP Target
+            "0000110c-0000-1000-8000-00805f9b34fb",  # AVRCP Controller
+            "0000111e-0000-1000-8000-00805f9b34fb",  # Handsfree
+        ]
+        return any(uuid.lower() in [u.lower() for u in self.uuids] for uuid in audio_uuids)
+    
+    @property
+    def device_type(self) -> str:
+        """Get a human-readable device type."""
+        icon_lower = self.icon.lower()
+        if "phone" in icon_lower:
+            return "Phone"
+        elif "computer" in icon_lower:
+            return "Computer"
+        elif "audio" in icon_lower or "headset" in icon_lower or "headphone" in icon_lower:
+            return "Audio Device"
+        elif "input" in icon_lower or "keyboard" in icon_lower or "mouse" in icon_lower:
+            return "Input Device"
+        else:
+            return "Bluetooth Device"
 
 
 class BluetoothAgent(ServiceInterface):
@@ -435,25 +507,53 @@ class BluetoothManager:
             
         devices = []
         
-        introspection = await self._bus.introspect(BLUEZ_SERVICE, "/")
-        proxy = self._bus.get_proxy_object(BLUEZ_SERVICE, "/", introspection)
-        obj_manager = proxy.get_interface(OBJECT_MANAGER_INTERFACE)
-        
-        objects = await obj_manager.call_get_managed_objects()
-        
-        for path, interfaces in objects.items():
-            if DEVICE_INTERFACE in interfaces:
-                device_props = interfaces[DEVICE_INTERFACE]
-                device = BluetoothDevice(
-                    path=path,
-                    address=device_props.get("Address", Variant("s", "")).value,
-                    name=device_props.get("Name", Variant("s", "Unknown")).value,
-                    paired=device_props.get("Paired", Variant("b", False)).value,
-                    trusted=device_props.get("Trusted", Variant("b", False)).value,
-                    connected=device_props.get("Connected", Variant("b", False)).value,
-                    icon=device_props.get("Icon", Variant("s", "audio-card")).value,
-                )
-                devices.append(device)
+        try:
+            introspection = await self._bus.introspect(BLUEZ_SERVICE, "/")
+            proxy = self._bus.get_proxy_object(BLUEZ_SERVICE, "/", introspection)
+            obj_manager = proxy.get_interface(OBJECT_MANAGER_INTERFACE)
+            
+            objects = await obj_manager.call_get_managed_objects()
+            
+            for path, interfaces in objects.items():
+                if DEVICE_INTERFACE in interfaces:
+                    device_props = interfaces[DEVICE_INTERFACE]
+                    
+                    # Extract UUIDs
+                    uuids_var = device_props.get("UUIDs", Variant("as", []))
+                    uuids = uuids_var.value if uuids_var else []
+                    
+                    # Extract RSSI if available
+                    rssi_var = device_props.get("RSSI")
+                    rssi = rssi_var.value if rssi_var else None
+                    
+                    # Check for battery level in org.bluez.Battery1
+                    battery = None
+                    battery_interface = "org.bluez.Battery1"
+                    if battery_interface in interfaces:
+                        battery_props = interfaces[battery_interface]
+                        battery_var = battery_props.get("Percentage")
+                        battery = battery_var.value if battery_var else None
+                    
+                    connected = device_props.get("Connected", Variant("b", False)).value
+                    
+                    device = BluetoothDevice(
+                        path=path,
+                        address=device_props.get("Address", Variant("s", "")).value,
+                        name=device_props.get("Name", Variant("s", "Unknown")).value,
+                        paired=device_props.get("Paired", Variant("b", False)).value,
+                        trusted=device_props.get("Trusted", Variant("b", False)).value,
+                        connected=connected,
+                        blocked=device_props.get("Blocked", Variant("b", False)).value,
+                        icon=device_props.get("Icon", Variant("s", "audio-card")).value,
+                        rssi=rssi,
+                        battery_percentage=battery,
+                        uuids=uuids,
+                        state=DeviceState.CONNECTED if connected else DeviceState.DISCONNECTED,
+                    )
+                    devices.append(device)
+        except Exception as e:
+            logger.error(f"Failed to get devices: {e}")
+            raise AdapterError(f"Failed to get devices: {e}") from e
                 
         return devices
         
@@ -480,38 +580,74 @@ class BluetoothManager:
     async def connect_device(self, device_path: str) -> None:
         """Connect to a device."""
         if not self._bus:
-            return
+            raise ConnectionError("Not connected to D-Bus")
             
-        introspection = await self._bus.introspect(BLUEZ_SERVICE, device_path)
-        proxy = self._bus.get_proxy_object(BLUEZ_SERVICE, device_path, introspection)
-        device = proxy.get_interface(DEVICE_INTERFACE)
-        
-        await device.call_connect()
-        logger.info(f"Device connected: {device_path}")
+        try:
+            introspection = await self._bus.introspect(BLUEZ_SERVICE, device_path)
+            proxy = self._bus.get_proxy_object(BLUEZ_SERVICE, device_path, introspection)
+            device = proxy.get_interface(DEVICE_INTERFACE)
+            
+            await device.call_connect()
+            logger.info(f"Device connected: {device_path}")
+        except Exception as e:
+            error_msg = str(e)
+            # Parse common BlueZ error messages
+            if "org.bluez.Error.Failed" in error_msg:
+                if "Host is down" in error_msg:
+                    raise ConnectionError("Device is not in range or powered off")
+                elif "Connection refused" in error_msg:
+                    raise ConnectionError("Device refused the connection")
+                elif "le-connection-abort-by-local" in error_msg:
+                    raise ConnectionError("Connection was aborted")
+                else:
+                    raise ConnectionError(f"Connection failed: {error_msg}")
+            elif "org.bluez.Error.InProgress" in error_msg:
+                raise ConnectionError("Connection already in progress")
+            elif "org.bluez.Error.AlreadyConnected" in error_msg:
+                logger.info(f"Device already connected: {device_path}")
+                return
+            elif "org.bluez.Error.NotReady" in error_msg:
+                raise ConnectionError("Bluetooth adapter is not ready")
+            else:
+                raise ConnectionError(f"Connection failed: {error_msg}")
         
     async def disconnect_device(self, device_path: str) -> None:
         """Disconnect a device."""
         if not self._bus:
-            return
+            raise ConnectionError("Not connected to D-Bus")
             
-        introspection = await self._bus.introspect(BLUEZ_SERVICE, device_path)
-        proxy = self._bus.get_proxy_object(BLUEZ_SERVICE, device_path, introspection)
-        device = proxy.get_interface(DEVICE_INTERFACE)
-        
-        await device.call_disconnect()
-        logger.info(f"Device disconnected: {device_path}")
+        try:
+            introspection = await self._bus.introspect(BLUEZ_SERVICE, device_path)
+            proxy = self._bus.get_proxy_object(BLUEZ_SERVICE, device_path, introspection)
+            device = proxy.get_interface(DEVICE_INTERFACE)
+            
+            await device.call_disconnect()
+            logger.info(f"Device disconnected: {device_path}")
+        except Exception as e:
+            error_msg = str(e)
+            if "org.bluez.Error.NotConnected" in error_msg:
+                logger.info(f"Device already disconnected: {device_path}")
+                return
+            raise ConnectionError(f"Disconnect failed: {error_msg}")
         
     async def remove_device(self, device_path: str) -> None:
         """Remove/unpair a device."""
         if not self._bus or not self._adapter_path:
-            return
+            raise AdapterError("Not connected to D-Bus or no adapter found")
             
-        introspection = await self._bus.introspect(BLUEZ_SERVICE, self._adapter_path)
-        proxy = self._bus.get_proxy_object(BLUEZ_SERVICE, self._adapter_path, introspection)
-        adapter = proxy.get_interface(ADAPTER_INTERFACE)
-        
-        await adapter.call_remove_device(device_path)
-        logger.info(f"Device removed: {device_path}")
+        try:
+            introspection = await self._bus.introspect(BLUEZ_SERVICE, self._adapter_path)
+            proxy = self._bus.get_proxy_object(BLUEZ_SERVICE, self._adapter_path, introspection)
+            adapter = proxy.get_interface(ADAPTER_INTERFACE)
+            
+            await adapter.call_remove_device(device_path)
+            logger.info(f"Device removed: {device_path}")
+        except Exception as e:
+            error_msg = str(e)
+            if "org.bluez.Error.DoesNotExist" in error_msg:
+                logger.info(f"Device already removed: {device_path}")
+                return
+            raise AdapterError(f"Failed to remove device: {error_msg}")
         
     async def disconnect(self) -> None:
         """Disconnect from D-Bus."""
