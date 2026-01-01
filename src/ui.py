@@ -16,6 +16,49 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from nicegui import app, ui
 
+# Dark mode CSS fixes for Quasar components
+DARK_MODE_CSS = """
+/* Fix card backgrounds and shadows in dark mode */
+.body--dark .q-card {
+    background-color: #1d1d1d;
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4), 0 2px 2px rgba(0, 0, 0, 0.3), 0 3px 1px -2px rgba(0, 0, 0, 0.24);
+}
+
+/* Fix nested cards in dark mode */
+.body--dark .q-card .q-card {
+    background-color: #2d2d2d;
+}
+
+/* Fix dialog cards in dark mode */
+.body--dark .q-dialog .q-card {
+    background-color: #1d1d1d;
+}
+
+/* Fix separator color in dark mode */
+.body--dark .q-separator {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Fix input fields in dark mode */
+.body--dark .q-field__control {
+    color: rgba(255, 255, 255, 0.87);
+}
+
+.body--dark .q-field__native,
+.body--dark .q-field__input {
+    color: rgba(255, 255, 255, 0.87);
+}
+
+/* Fix select dropdown in dark mode */
+.body--dark .q-menu {
+    background-color: #1d1d1d;
+}
+
+.body--dark .q-item {
+    color: rgba(255, 255, 255, 0.87);
+}
+"""
+
 if TYPE_CHECKING:
     from .bluetooth_agent import BluetoothDevice, BluetoothManager, PairingRequest, DeviceState
     from .audio_manager import AudioManager, AudioSink
@@ -578,6 +621,7 @@ class PistonAudioUI:
     async def _render_main_page(self) -> None:
         """Render the main page."""
         ui.dark_mode().auto()
+        ui.add_head_html(f"<style>{DARK_MODE_CSS}</style>")
         
         with ui.header():
             ui.label("Piston Audio").style("font-size: 1.25rem; font-weight: bold")
@@ -626,6 +670,7 @@ class PistonAudioUI:
     async def _render_settings_page(self) -> None:
         """Render the settings page."""
         ui.dark_mode().auto()
+        ui.add_head_html(f"<style>{DARK_MODE_CSS}</style>")
         
         with ui.header():
             ui.button(icon="arrow_back", on_click=lambda: ui.navigate.to("/")).props("flat round")
