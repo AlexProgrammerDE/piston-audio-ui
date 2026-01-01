@@ -321,7 +321,7 @@ monitor.bluez.properties = {
 # Keep Bluetooth running even without active user session (headless)
 wireplumber.profiles = {
     main = {
-        monitor.bluez.seat-monitoring = false
+        monitor.bluez.seat-monitoring = disabled
     }
 }
 EOF
