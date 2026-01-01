@@ -35,6 +35,8 @@ Turn your Raspberry Pi into a Bluetooth audio receiver with a sleek web interfac
 |  [mute] [==========|--------] 65%        |
 |                                          |
 +------------------------------------------+
+
+Default port: 7654
 ```
 
 ## Quick Start
@@ -79,7 +81,7 @@ cd piston-audio-ui
 
 Open a browser and navigate to:
 ```
-http://<raspberry-pi-ip>:8080
+http://<raspberry-pi-ip>:7654
 ```
 
 Find your Pi's IP address with:
@@ -102,22 +104,42 @@ piston-audio [OPTIONS]
 
 Options:
   --host TEXT     Host to bind to (default: 0.0.0.0)
-  --port INTEGER  Port to listen on (default: 8080)
+  --port INTEGER  Port to listen on (default: 7654)
   --name TEXT     Bluetooth device name (default: Piston Audio)
   --debug         Enable debug logging
+```
+
+### Updating
+
+To update an existing installation:
+```bash
+cd piston-audio-ui
+git pull
+sudo ./install.sh --update
+```
+
+Or simply re-run the installer (it detects existing installations):
+```bash
+sudo ./install.sh
 ```
 
 ## Requirements
 
 ### Hardware
-- Raspberry Pi 3/4/5 (or any Pi with Bluetooth)
-- Audio output (3.5mm jack, HDMI, USB DAC, or I2S DAC)
+- Raspberry Pi 3/4/5/Zero 2 W (or any Pi with Bluetooth)
+- Audio output (3.5mm jack, HDMI, USB DAC, or I2S DAC/HAT)
 
 ### Software
-- Raspberry Pi OS (Bookworm recommended)
+- Raspberry Pi OS Lite (Bookworm or Trixie recommended)
 - Python 3.9+
 - BlueZ 5.x
-- PipeWire or PulseAudio
+- PipeWire + WirePlumber (preferred, auto-installed)
+
+### Tested On
+- Raspberry Pi OS Lite (64-bit) - Bookworm
+- Raspberry Pi OS Lite (64-bit) - Trixie
+- Raspberry Pi 4 Model B
+- Raspberry Pi Zero 2 W
 
 ## Configuration
 
@@ -160,9 +182,31 @@ sudo systemctl stop piston-audio
 # View logs
 sudo journalctl -u piston-audio -f
 
-# Enable at boot
+# Enable at boot (done automatically by installer)
 sudo systemctl enable piston-audio
+
+# Check status
+sudo systemctl status piston-audio
 ```
+
+## How It Works
+
+### Bluetooth A2DP Sink
+
+The Raspberry Pi is configured as a Bluetooth A2DP sink (audio receiver). When a phone or computer connects:
+
+1. **BlueZ** handles the Bluetooth connection and pairing
+2. **PipeWire** receives the A2DP audio stream
+3. **WirePlumber** automatically routes audio to the default output
+4. **Piston Audio UI** provides web-based management
+
+### Headless Operation
+
+For Raspberry Pi OS Lite (headless), the installer configures:
+
+- **Console autologin**: Required for PipeWire user services
+- **User lingering**: Keeps services running without active login
+- **WirePlumber config**: Disables seat monitoring for headless use
 
 ## Architecture
 

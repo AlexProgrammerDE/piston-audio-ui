@@ -140,8 +140,8 @@ def main():
     parser.add_argument(
         "--port",
         type=int,
-        default=8080,
-        help="Port to listen on (default: 8080)",
+        default=7654,
+        help="Port to listen on (default: 7654)",
     )
     parser.add_argument(
         "--name",

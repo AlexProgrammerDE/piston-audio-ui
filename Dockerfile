@@ -13,12 +13,14 @@ LABEL org.opencontainers.image.licenses="MIT"
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bluez \
-    bluez-tools \
-    pulseaudio \
-    pulseaudio-module-bluetooth \
+    pipewire \
+    pipewire-audio-client-libraries \
+    wireplumber \
+    libspa-0.2-bluetooth \
     libdbus-1-3 \
     libglib2.0-0 \
     dbus \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -36,7 +38,7 @@ COPY pyproject.toml .
 RUN pip install --no-cache-dir -e .
 
 # Expose web UI port
-EXPOSE 8080
+EXPOSE 7654
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1
@@ -44,8 +46,8 @@ ENV DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/ || exit 1
+    CMD curl -f http://localhost:7654/ || exit 1
 
 # Run the application
 ENTRYPOINT ["python", "-m", "src.main"]
-CMD ["--host", "0.0.0.0", "--port", "8080"]
+CMD ["--host", "0.0.0.0", "--port", "7654"]
