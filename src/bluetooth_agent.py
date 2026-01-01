@@ -7,13 +7,14 @@ This module implements a BlueZ agent that can:
 - Manage device connections
 """
 
-from __future__ import annotations
+# NOTE: Do NOT use 'from __future__ import annotations' here!
+# dbus_fast requires the annotations to be available at class definition time
 
 import asyncio
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Any
+from typing import Callable, Optional, Dict, List, Tuple, Union
 
 from dbus_fast import BusType, Variant
 from dbus_fast.aio import MessageBus
@@ -45,9 +46,9 @@ class PairingRequest:
     device_path: str
     device_name: str
     device_address: str
-    passkey: str | None = None
+    passkey: Optional[str] = None
     status: PairingStatus = PairingStatus.PENDING
-    future: asyncio.Future | None = None
+    future: Optional[asyncio.Future] = None
 
 
 @dataclass
@@ -72,17 +73,17 @@ class BluetoothAgent(ServiceInterface):
     
     def __init__(
         self,
-        on_pairing_request: Callable[[PairingRequest], None] | None = None,
+        on_pairing_request: Optional[Callable[[PairingRequest], None]] = None,
         pairing_timeout: int = 60,
     ):
         super().__init__(AGENT_INTERFACE)
         self._on_pairing_request = on_pairing_request
         self._pairing_timeout = pairing_timeout
-        self._pending_requests: dict[str, PairingRequest] = {}
-        self._bus: MessageBus | None = None
+        self._pending_requests: Dict[str, PairingRequest] = {}
+        self._bus: Optional[MessageBus] = None
         
     @property
-    def pending_requests(self) -> dict[str, PairingRequest]:
+    def pending_requests(self) -> Dict[str, PairingRequest]:
         """Get pending pairing requests."""
         return self._pending_requests
     
@@ -90,7 +91,7 @@ class BluetoothAgent(ServiceInterface):
         """Set the D-Bus connection."""
         self._bus = bus
         
-    async def _get_device_info(self, device_path: str) -> tuple[str, str]:
+    async def _get_device_info(self, device_path: str) -> Tuple[str, str]:
         """Get device name and address from D-Bus path."""
         if not self._bus:
             return "Unknown", "00:00:00:00:00:00"
@@ -115,7 +116,8 @@ class BluetoothAgent(ServiceInterface):
     
     async def _wait_for_response(self, request: PairingRequest) -> bool:
         """Wait for user response to pairing request."""
-        request.future = asyncio.get_event_loop().create_future()
+        loop = asyncio.get_event_loop()
+        request.future = loop.create_future()
         
         try:
             await asyncio.wait_for(request.future, timeout=self._pairing_timeout)
@@ -127,20 +129,20 @@ class BluetoothAgent(ServiceInterface):
             if request.device_path in self._pending_requests:
                 del self._pending_requests[request.device_path]
 
-    @method(name="Release")
-    def release(self) -> None:
+    @method()
+    def Release(self) -> None:
         """Called when the agent is unregistered."""
         logger.info("Bluetooth agent released")
         
-    @method(name="RequestPinCode")
-    async def request_pin_code(self, device: str) -> str:
+    @method()
+    async def RequestPinCode(self, device: 'o') -> 's':
         """Request PIN code for pairing."""
         name, address = await self._get_device_info(device)
         logger.info(f"PIN code requested for {name} ({address})")
         return "0000"
         
-    @method(name="DisplayPinCode")
-    async def display_pin_code(self, device: str, pincode: str) -> None:
+    @method()
+    async def DisplayPinCode(self, device: 'o', pincode: 's') -> None:
         """Display PIN code for user."""
         name, address = await self._get_device_info(device)
         logger.info(f"Display PIN {pincode} for {name} ({address})")
@@ -156,15 +158,15 @@ class BluetoothAgent(ServiceInterface):
         if self._on_pairing_request:
             self._on_pairing_request(request)
             
-    @method(name="RequestPasskey")
-    async def request_passkey(self, device: str) -> int:
+    @method()
+    async def RequestPasskey(self, device: 'o') -> 'u':
         """Request passkey for pairing."""
         name, address = await self._get_device_info(device)
         logger.info(f"Passkey requested for {name} ({address})")
         return 0
         
-    @method(name="DisplayPasskey")
-    async def display_passkey(self, device: str, passkey: int, entered: int) -> None:
+    @method()
+    async def DisplayPasskey(self, device: 'o', passkey: 'u', entered: 'q') -> None:
         """Display passkey for user."""
         name, address = await self._get_device_info(device)
         passkey_str = f"{passkey:06d}"
@@ -181,8 +183,8 @@ class BluetoothAgent(ServiceInterface):
         if self._on_pairing_request:
             self._on_pairing_request(request)
             
-    @method(name="RequestConfirmation")
-    async def request_confirmation(self, device: str, passkey: int) -> None:
+    @method()
+    async def RequestConfirmation(self, device: 'o', passkey: 'u') -> None:
         """Request confirmation for pairing."""
         name, address = await self._get_device_info(device)
         passkey_str = f"{passkey:06d}"
@@ -206,8 +208,8 @@ class BluetoothAgent(ServiceInterface):
             from dbus_fast import DBusError
             raise DBusError("org.bluez.Error.Rejected", "Pairing rejected by user")
             
-    @method(name="RequestAuthorization")
-    async def request_authorization(self, device: str) -> None:
+    @method()
+    async def RequestAuthorization(self, device: 'o') -> None:
         """Request authorization for incoming connection."""
         name, address = await self._get_device_info(device)
         logger.info(f"Authorization requested for {name} ({address})")
@@ -228,8 +230,8 @@ class BluetoothAgent(ServiceInterface):
             from dbus_fast import DBusError
             raise DBusError("org.bluez.Error.Rejected", "Authorization rejected by user")
             
-    @method(name="AuthorizeService")
-    async def authorize_service(self, device: str, uuid: str) -> None:
+    @method()
+    async def AuthorizeService(self, device: 'o', uuid: 's') -> None:
         """Authorize a Bluetooth service."""
         name, address = await self._get_device_info(device)
         logger.info(f"Service {uuid} authorization for {name} ({address})")
@@ -261,8 +263,8 @@ class BluetoothAgent(ServiceInterface):
             from dbus_fast import DBusError
             raise DBusError("org.bluez.Error.Rejected", "Service authorization rejected")
             
-    @method(name="Cancel")
-    def cancel(self) -> None:
+    @method()
+    def Cancel(self) -> None:
         """Cancel ongoing pairing."""
         logger.info("Pairing cancelled")
         # Cancel all pending requests
@@ -304,13 +306,13 @@ class BluetoothManager:
     """
     
     def __init__(self):
-        self._bus: MessageBus | None = None
-        self._agent: BluetoothAgent | None = None
-        self._adapter_path: str | None = None
-        self._on_device_change: Callable[[], None] | None = None
+        self._bus: Optional[MessageBus] = None
+        self._agent: Optional[BluetoothAgent] = None
+        self._adapter_path: Optional[str] = None
+        self._on_device_change: Optional[Callable[[], None]] = None
         
     @property
-    def agent(self) -> BluetoothAgent | None:
+    def agent(self) -> Optional[BluetoothAgent]:
         """Get the Bluetooth agent."""
         return self._agent
         
@@ -340,7 +342,7 @@ class BluetoothManager:
             
     async def register_agent(
         self,
-        on_pairing_request: Callable[[PairingRequest], None] | None = None,
+        on_pairing_request: Optional[Callable[[PairingRequest], None]] = None,
         pairing_timeout: int = 60,
     ) -> BluetoothAgent:
         """Register the Bluetooth agent."""
@@ -426,7 +428,7 @@ class BluetoothManager:
         await props.call_set(ADAPTER_INTERFACE, "Alias", Variant("s", alias))
         logger.info(f"Adapter alias set to: {alias}")
         
-    async def get_devices(self) -> list[BluetoothDevice]:
+    async def get_devices(self) -> List[BluetoothDevice]:
         """Get all paired/known devices."""
         if not self._bus:
             return []
@@ -455,7 +457,7 @@ class BluetoothManager:
                 
         return devices
         
-    async def get_connected_device(self) -> BluetoothDevice | None:
+    async def get_connected_device(self) -> Optional[BluetoothDevice]:
         """Get the currently connected device, if any."""
         devices = await self.get_devices()
         for device in devices:
