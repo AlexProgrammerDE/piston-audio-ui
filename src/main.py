@@ -8,9 +8,7 @@ Main entry point for the application.
 from __future__ import annotations
 
 import argparse
-import asyncio
 import logging
-import signal
 import sys
 from pathlib import Path
 
@@ -50,8 +48,6 @@ class PistonAudio:
         self.bt_manager = BluetoothManager()
         self.audio_manager = AudioManager()
         self.ui: PistonAudioUI | None = None
-        
-        self._shutdown_event = asyncio.Event()
         
     async def setup(self) -> None:
         """Initialize the application."""
@@ -100,22 +96,15 @@ class PistonAudio:
             await self.bt_manager.disconnect()
         except Exception:
             pass
-            
-        self._shutdown_event.set()
         
     def run(self) -> None:
         """Run the application."""
-        # Setup signal handlers
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # Use NiceGUI's startup hook to run async setup
+        # This ensures we use the same event loop as NiceGUI
+        app.on_startup(self.setup)
+        app.on_shutdown(self.shutdown)
         
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, lambda: asyncio.create_task(self.shutdown()))
-            
-        # Run setup
-        loop.run_until_complete(self.setup())
-        
-        # Start NiceGUI
+        # Start NiceGUI - it manages its own event loop
         ui.run(
             host=self.host,
             port=self.port,
