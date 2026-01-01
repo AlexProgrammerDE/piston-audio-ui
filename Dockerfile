@@ -3,7 +3,7 @@
 # Build: docker build -t piston-audio .
 # Run:   docker run --privileged --net=host -v /var/run/dbus:/var/run/dbus piston-audio
 
-FROM python:3.11-slim-bookworm
+FROM python:3.14-slim-bookworm
 
 LABEL org.opencontainers.image.title="Piston Audio"
 LABEL org.opencontainers.image.description="Raspberry Pi Bluetooth Audio Receiver with Web UI"
