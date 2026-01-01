@@ -24,17 +24,32 @@ VERSION="1.0.0"
 REPO_URL="https://github.com/AlexProgrammerDE/piston-audio-ui.git"
 INSTALL_DIR="/opt/piston-audio"
 
-# Determine script directory - handle both local run and curl pipe
-if [ -n "${BASH_SOURCE[0]}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    # Check if we're in the actual repo directory
-    if [ -f "$SCRIPT_DIR/requirements.txt" ] && [ -d "$SCRIPT_DIR/src" ]; then
-        INSTALL_DIR="$SCRIPT_DIR"
+# Determine if we're running from the repo directory or via curl pipe
+# When run via curl pipe, BASH_SOURCE[0] will be "bash" or similar, not a real file path
+detect_install_dir() {
+    local script_path="${BASH_SOURCE[0]}"
+    
+    # Check if BASH_SOURCE points to a real file (not "bash" or stdin)
+    if [ -f "$script_path" ]; then
+        local script_dir="$(cd "$(dirname "$script_path")" && pwd)"
+        
+        # Verify this is actually our repo directory
+        if [ -f "$script_dir/requirements.txt" ] && [ -d "$script_dir/src" ]; then
+            INSTALL_DIR="$script_dir"
+            return 0
+        fi
     fi
-else
-    # Running from curl pipe - will clone to INSTALL_DIR
-    SCRIPT_DIR=""
-fi
+    
+    # Check if /opt/piston-audio already exists and is valid
+    if [ -f "$INSTALL_DIR/requirements.txt" ] && [ -d "$INSTALL_DIR/src" ]; then
+        return 0
+    fi
+    
+    # Will need to clone - INSTALL_DIR stays as /opt/piston-audio
+    return 0
+}
+
+detect_install_dir
 
 # Colors for output
 RED='\033[0;31m'
@@ -358,14 +373,21 @@ EOF
 install_python_deps() {
     step "Setting up Python environment..."
     
+    # Change to install directory
+    cd "$INSTALL_DIR"
+    
     VENV_DIR="$INSTALL_DIR/venv"
     
     # Verify requirements.txt exists
     if [ ! -f "$INSTALL_DIR/requirements.txt" ]; then
         error "requirements.txt not found in $INSTALL_DIR"
         error "Please ensure project files are properly installed"
+        error "Contents of $INSTALL_DIR:"
+        ls -la "$INSTALL_DIR" 2>/dev/null || echo "  Directory does not exist"
         exit 1
     fi
+    
+    info "Using requirements from: $INSTALL_DIR/requirements.txt"
     
     # Create or update virtual environment
     if [ -d "$VENV_DIR" ]; then
@@ -513,9 +535,11 @@ update_installation() {
     success "Update complete!"
 }
 
-# Check if this is an update
+# Check if this is an update (service exists AND project files exist)
 is_update() {
-    [ -f /etc/systemd/system/piston-audio.service ]
+    [ -f /etc/systemd/system/piston-audio.service ] && \
+    [ -f "$INSTALL_DIR/requirements.txt" ] && \
+    [ -d "$INSTALL_DIR/src" ]
 }
 
 # Print final instructions
@@ -558,15 +582,18 @@ main() {
     check_root
     detect_os
     
+    info "Install directory: $INSTALL_DIR"
+    
     if is_update; then
         info "Existing installation detected - performing update"
         setup_project_files
         update_installation
     else
-        info "Fresh installation to $INSTALL_DIR"
+        info "Fresh installation"
         setup_repositories
         install_system_deps
         setup_project_files
+        info "Project files ready in: $INSTALL_DIR"
         configure_bluetooth
         configure_pipewire
         configure_user_session
