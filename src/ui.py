@@ -11,7 +11,6 @@ Provides:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -40,23 +39,20 @@ class PairingDialog:
         
     def show(self) -> None:
         """Display the pairing dialog."""
-        with ui.dialog() as self.dialog, ui.card().classes("p-6"):
-            ui.label("Bluetooth Pairing Request").classes("text-xl font-bold mb-4")
+        with ui.dialog() as self.dialog, ui.card():
+            ui.label("Bluetooth Pairing Request").style("font-size: 1.25rem; font-weight: bold")
             
-            with ui.column().classes("gap-2 mb-4"):
-                ui.label(f"Device: {self.request.device_name}").classes("text-lg")
-                ui.label(f"Address: {self.request.device_address}").classes("text-gray-500")
-                
-                if self.request.passkey:
-                    ui.separator()
-                    ui.label("Confirm this passkey matches your device:").classes("mt-2")
-                    ui.label(self.request.passkey).classes(
-                        "text-3xl font-mono font-bold text-primary tracking-widest my-4"
-                    )
+            ui.label(f"Device: {self.request.device_name}")
+            ui.label(f"Address: {self.request.device_address}").props("caption")
+            
+            if self.request.passkey:
+                ui.separator()
+                ui.label("Confirm this passkey matches your device:")
+                ui.label(self.request.passkey).style("font-size: 2rem; font-family: monospace; font-weight: bold; letter-spacing: 0.25em")
                     
-            with ui.row().classes("gap-4 justify-end w-full"):
-                ui.button("Reject", on_click=self._reject).props("flat color=negative")
-                ui.button("Accept", on_click=self._accept).props("color=positive")
+            with ui.row():
+                ui.button("Reject", on_click=self._reject, color="negative").props("flat")
+                ui.button("Accept", on_click=self._accept, color="positive")
                 
         self.dialog.open()
         
@@ -90,37 +86,37 @@ class DeviceCard:
         
     def render(self) -> ui.card:
         """Render the device card."""
-        with ui.card().classes("w-full p-4") as card:
-            with ui.row().classes("items-center justify-between w-full"):
-                with ui.row().classes("items-center gap-3"):
-                    # Device icon based on type
+        with ui.card() as card:
+            with ui.row().classes("w-full items-center justify-between"):
+                with ui.row().classes("items-center"):
                     icon = "smartphone" if "phone" in self.device.icon.lower() else "bluetooth"
                     if self.device.connected:
-                        ui.icon(icon, color="positive").classes("text-2xl")
+                        ui.icon(icon, color="positive", size="md")
                     else:
-                        ui.icon(icon, color="grey").classes("text-2xl")
+                        ui.icon(icon, color="grey", size="md")
                         
-                    with ui.column().classes("gap-0"):
-                        ui.label(self.device.name).classes("font-medium")
-                        ui.label(self.device.address).classes("text-xs text-gray-500")
+                    with ui.column():
+                        ui.label(self.device.name)
+                        ui.label(self.device.address).props("caption")
                         
-                with ui.row().classes("gap-2"):
+                with ui.row():
                     if self.device.connected:
-                        ui.chip("Connected", color="positive").props("dense")
+                        ui.badge("Connected", color="positive")
                         ui.button(
                             icon="link_off",
                             on_click=lambda: self.on_disconnect(self.device.path)
-                        ).props("flat dense").tooltip("Disconnect")
+                        ).props("flat round").tooltip("Disconnect")
                     else:
                         ui.button(
                             icon="link",
                             on_click=lambda: self.on_connect(self.device.path)
-                        ).props("flat dense").tooltip("Connect")
+                        ).props("flat round").tooltip("Connect")
                         
                     ui.button(
                         icon="delete",
-                        on_click=lambda: self.on_remove(self.device.path)
-                    ).props("flat dense color=negative").tooltip("Remove device")
+                        on_click=lambda: self.on_remove(self.device.path),
+                        color="negative"
+                    ).props("flat round").tooltip("Remove device")
                     
         return card
 
@@ -141,7 +137,6 @@ class AudioOutputSelector:
             self.select.options = options
             self.select.update()
             
-            # Set current default
             for sink in self.sinks:
                 if sink.is_default:
                     self.select.value = sink.name
@@ -152,31 +147,24 @@ class AudioOutputSelector:
         if e.value:
             success = await self.audio_manager.set_default_sink(e.value)
             if success:
-                ui.notify(f"Audio output changed", type="positive")
+                ui.notify("Audio output changed", type="positive")
             else:
                 ui.notify("Failed to change audio output", type="negative")
                 
-    def render(self) -> ui.column:
+    def render(self) -> None:
         """Render the audio output selector."""
-        with ui.column().classes("w-full gap-2") as col:
-            ui.label("Audio Output").classes("font-medium")
-            
-            options = {s.name: s.display_name for s in self.sinks}
-            default = next((s.name for s in self.sinks if s.is_default), None)
-            
-            self.select = ui.select(
-                options=options,
-                value=default,
-                on_change=self._on_change,
-            ).classes("w-full")
-            
-            ui.button(
-                "Refresh",
-                icon="refresh",
-                on_click=self.refresh,
-            ).props("flat dense")
-            
-        return col
+        ui.label("Audio Output")
+        
+        options = {s.name: s.display_name for s in self.sinks}
+        default = next((s.name for s in self.sinks if s.is_default), None)
+        
+        self.select = ui.select(
+            options=options,
+            value=default,
+            on_change=self._on_change,
+        ).classes("w-full")
+        
+        ui.button("Refresh", icon="refresh", on_click=self.refresh).props("flat")
 
 
 class VolumeControl:
@@ -205,29 +193,26 @@ class VolumeControl:
             await self.audio_manager.toggle_mute(self.current_sink.name)
             await self.refresh()
             
-    def render(self) -> ui.column:
+    def render(self) -> None:
         """Render the volume control."""
         initial_volume = int(self.current_sink.volume) if self.current_sink else 50
         
-        with ui.column().classes("w-full gap-2") as col:
-            ui.label("Volume").classes("font-medium")
+        ui.label("Volume")
+        
+        with ui.row().classes("w-full items-center"):
+            self.mute_btn = ui.button(
+                icon="volume_up",
+                on_click=self._on_mute_toggle,
+            ).props("flat round")
             
-            with ui.row().classes("w-full items-center gap-4"):
-                self.mute_btn = ui.button(
-                    icon="volume_up",
-                    on_click=self._on_mute_toggle,
-                ).props("flat dense")
-                
-                self.slider = ui.slider(
-                    min=0,
-                    max=150,
-                    value=initial_volume,
-                    on_change=self._on_volume_change,
-                ).classes("flex-grow")
-                
-                ui.label().bind_text_from(self.slider, "value", lambda v: f"{int(v)}%")
-                
-        return col
+            self.slider = ui.slider(
+                min=0,
+                max=150,
+                value=initial_volume,
+                on_change=self._on_volume_change,
+            ).classes("flex-grow")
+            
+            ui.label().bind_text_from(self.slider, "value", lambda v: f"{int(v)}%")
 
 
 class PistonAudioUI:
@@ -254,21 +239,18 @@ class PistonAudioUI:
         )
         self._pairing_dialogs[request.device_path] = dialog
         
-        # Show dialog in all connected clients
         try:
             clients = getattr(app, 'clients', {})
             for client in clients.values():
                 with client:
                     dialog.show()
         except Exception:
-            # Fallback: just show dialog in current context
             dialog.show()
                 
     async def _accept_pairing(self, device_path: str) -> None:
         """Accept a pairing request."""
         if self.bt_manager.agent:
             self.bt_manager.agent.accept_pairing(device_path)
-            # Trust the device for auto-reconnect
             await self.bt_manager.trust_device(device_path)
             ui.notify("Device paired and trusted", type="positive")
             await self._refresh_devices()
@@ -317,7 +299,7 @@ class PistonAudioUI:
         
         with self.devices_container:
             if not devices:
-                ui.label("No paired devices").classes("text-gray-500 italic")
+                ui.label("No paired devices").props("caption")
             else:
                 for device in devices:
                     DeviceCard(
@@ -356,47 +338,43 @@ class PistonAudioUI:
         """Render the main page."""
         ui.dark_mode().auto()
         
-        with ui.header().classes("items-center justify-between px-4"):
-            ui.label("Piston Audio").classes("text-xl font-bold")
-            with ui.row().classes("gap-2"):
-                ui.button(icon="settings", on_click=lambda: ui.navigate.to("/settings")).props("flat")
+        with ui.header():
+            ui.label("Piston Audio").style("font-size: 1.25rem; font-weight: bold")
+            ui.space()
+            ui.button(icon="settings", on_click=lambda: ui.navigate.to("/settings")).props("flat round")
                 
-        with ui.column().classes("w-full max-w-2xl mx-auto p-4 gap-6"):
+        with ui.column().classes("w-full max-w-2xl mx-auto p-4"):
             # Discoverable toggle
-            with ui.card().classes("w-full p-4"):
-                with ui.row().classes("items-center justify-between w-full"):
-                    with ui.column().classes("gap-0"):
-                        ui.label("Discoverable").classes("font-medium")
-                        ui.label("Allow devices to find and pair").classes("text-xs text-gray-500")
+            with ui.card().classes("w-full"):
+                with ui.row().classes("w-full items-center justify-between"):
+                    with ui.column():
+                        ui.label("Discoverable")
+                        ui.label("Allow devices to find and pair").props("caption")
                     ui.switch(on_change=self._toggle_discoverable)
                     
-            # Connected device section
-            with ui.card().classes("w-full p-4"):
-                with ui.row().classes("items-center justify-between w-full mb-4"):
-                    ui.label("Devices").classes("text-lg font-medium")
-                    ui.button(
-                        icon="refresh",
-                        on_click=self._refresh_devices,
-                    ).props("flat dense")
+            # Devices section
+            with ui.card().classes("w-full"):
+                with ui.row().classes("w-full items-center justify-between"):
+                    ui.label("Devices").style("font-size: 1.125rem")
+                    ui.button(icon="refresh", on_click=self._refresh_devices).props("flat round")
                     
-                self.devices_container = ui.column().classes("w-full gap-2")
+                self.devices_container = ui.column().classes("w-full")
                 await self._refresh_devices()
                 
-            # Audio output section
-            with ui.card().classes("w-full p-4"):
-                ui.label("Audio").classes("text-lg font-medium mb-4")
+            # Audio section
+            with ui.card().classes("w-full"):
+                ui.label("Audio").style("font-size: 1.125rem")
                 
                 self.output_selector = AudioOutputSelector(self.audio_manager)
                 await self.output_selector.refresh()
                 self.output_selector.render()
                 
-                ui.separator().classes("my-4")
+                ui.separator()
                 
                 self.volume_control = VolumeControl(self.audio_manager)
                 await self.volume_control.refresh()
                 self.volume_control.render()
                 
-        # Auto-refresh timer
         ui.timer(5.0, self._refresh_devices)
         ui.timer(2.0, self._refresh_audio)
         
@@ -404,55 +382,46 @@ class PistonAudioUI:
         """Render the settings page."""
         ui.dark_mode().auto()
         
-        with ui.header().classes("items-center px-4"):
-            ui.button(icon="arrow_back", on_click=lambda: ui.navigate.to("/")).props("flat")
-            ui.label("Settings").classes("text-xl font-bold ml-2")
+        with ui.header():
+            ui.button(icon="arrow_back", on_click=lambda: ui.navigate.to("/")).props("flat round")
+            ui.label("Settings").style("font-size: 1.25rem; font-weight: bold")
             
-        with ui.column().classes("w-full max-w-2xl mx-auto p-4 gap-6"):
+        with ui.column().classes("w-full max-w-2xl mx-auto p-4"):
             # Adapter settings
-            with ui.card().classes("w-full p-4"):
-                ui.label("Bluetooth Adapter").classes("text-lg font-medium mb-4")
+            with ui.card().classes("w-full"):
+                ui.label("Bluetooth Adapter").style("font-size: 1.125rem")
                 
                 adapter_info = await self.bt_manager.get_adapter_info()
                 
-                with ui.column().classes("gap-4 w-full"):
-                    # Adapter name
-                    name_input = ui.input(
-                        "Device Name",
-                        value=adapter_info.get("alias", "Piston Audio"),
-                    ).classes("w-full")
+                name_input = ui.input(
+                    "Device Name",
+                    value=adapter_info.get("alias", "Piston Audio"),
+                ).classes("w-full")
+                
+                async def save_name():
+                    await self.bt_manager.set_adapter_alias(name_input.value)
+                    ui.notify("Name saved", type="positive")
                     
-                    async def save_name():
-                        await self.bt_manager.set_adapter_alias(name_input.value)
-                        ui.notify("Name saved", type="positive")
-                        
-                    ui.button("Save Name", on_click=save_name).props("flat")
-                    
-                    ui.separator()
-                    
-                    # Adapter info
-                    with ui.column().classes("gap-1"):
-                        ui.label(f"Address: {adapter_info.get('address', 'Unknown')}").classes("text-sm")
-                        ui.label(f"Powered: {'Yes' if adapter_info.get('powered') else 'No'}").classes("text-sm")
+                ui.button("Save Name", on_click=save_name).props("flat")
+                
+                ui.separator()
+                
+                ui.label(f"Address: {adapter_info.get('address', 'Unknown')}").props("caption")
+                ui.label(f"Powered: {'Yes' if adapter_info.get('powered') else 'No'}").props("caption")
                         
             # Audio settings
-            with ui.card().classes("w-full p-4"):
-                ui.label("Audio Settings").classes("text-lg font-medium mb-4")
-                
-                with ui.column().classes("gap-4 w-full"):
-                    # Backend info
-                    backend = self.audio_manager.backend.value
-                    ui.label(f"Audio Backend: {backend.title()}").classes("text-sm")
+            with ui.card().classes("w-full"):
+                ui.label("Audio Settings").style("font-size: 1.125rem")
+                backend = self.audio_manager.backend.value
+                ui.label(f"Audio Backend: {backend.title()}").props("caption")
                     
             # About section
-            with ui.card().classes("w-full p-4"):
-                ui.label("About").classes("text-lg font-medium mb-4")
-                
-                with ui.column().classes("gap-2"):
-                    ui.label("Piston Audio v1.0.0").classes("font-medium")
-                    ui.label("Bluetooth audio receiver for Raspberry Pi").classes("text-sm text-gray-500")
-                    ui.link(
-                        "GitHub",
-                        "https://github.com/AlexProgrammerDE/piston-audio-ui",
-                        new_tab=True,
-                    ).classes("text-sm")
+            with ui.card().classes("w-full"):
+                ui.label("About").style("font-size: 1.125rem")
+                ui.label("Piston Audio v1.0.0")
+                ui.label("Bluetooth audio receiver for Raspberry Pi").props("caption")
+                ui.link(
+                    "GitHub",
+                    "https://github.com/AlexProgrammerDE/piston-audio-ui",
+                    new_tab=True,
+                )
